@@ -146,3 +146,69 @@ func TestFileProviderFetchValueYAMLFileNoKeyInFile(t *testing.T) {
 
 	assert.NotNil(t, err)
 }
+
+func TestFileProviderFetchValueYAMLFileComplexKey(t *testing.T) {
+	file, _ := os.CreateTemp("", "invokenv")
+	defer os.Remove(file.Name())
+
+	file.WriteString("---\nmap:\n  list:\n    - foo\n    - bar\n")
+	file.Close()
+
+	params := map[string]interface{}{
+		"path":   file.Name(),
+		"format": "yaml",
+		"key":    "map.list[1]",
+	}
+
+	p, err := NewFileProvider(params)
+	assert.Nil(t, err)
+
+	value, err := p.FetchValue()
+
+	assert.Nil(t, err)
+	assert.Equal(t, "bar", value)
+}
+
+func TestFileProviderFetchValueJSONFileOK(t *testing.T) {
+	file, _ := os.CreateTemp("", "invokenv")
+	defer os.Remove(file.Name())
+
+	file.WriteString(`{"foo":"bar"}`)
+	file.Close()
+
+	params := map[string]interface{}{
+		"path":   file.Name(),
+		"format": "json",
+		"key":    "foo",
+	}
+
+	p, err := NewFileProvider(params)
+	assert.Nil(t, err)
+
+	value, err := p.FetchValue()
+
+	assert.Nil(t, err)
+	assert.Equal(t, "bar", value)
+}
+
+func TestFileProviderFetchValueTOMLFileOK(t *testing.T) {
+	file, _ := os.CreateTemp("", "invokenv")
+	defer os.Remove(file.Name())
+
+	file.WriteString(`foo = "bar"`)
+	file.Close()
+
+	params := map[string]interface{}{
+		"path":   file.Name(),
+		"format": "toml",
+		"key":    "foo",
+	}
+
+	p, err := NewFileProvider(params)
+	assert.Nil(t, err)
+
+	value, err := p.FetchValue()
+
+	assert.Nil(t, err)
+	assert.Equal(t, "bar", value)
+}

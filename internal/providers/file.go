@@ -1,10 +1,14 @@
 package providers
 
 import (
+	"encoding/json/v2"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
+	"github.com/BurntSushi/toml"
+	"github.com/jmespath/go-jmespath"
 	"go.yaml.in/yaml/v4"
 )
 
@@ -42,7 +46,11 @@ func NewFileProvider(params map[string]interface{}) (*FileProvider, error) {
 func (p *FileProvider) FetchValue() (string, error) {
 	switch strings.ToLower(p.Params.Format) {
 	case "yaml":
-		return readYamlFile(p.Params.Path, p.Params.Key)
+		return readYAMLFile(p.Params.Path, p.Params.Key)
+	case "json":
+		return readJSONFile(p.Params.Path, p.Params.Key)
+	case "toml":
+		return readTOMLFile(p.Params.Path, p.Params.Key)
 	case "raw", "":
 		return readRawFile(p.Params.Path)
 	}
@@ -59,7 +67,27 @@ func readRawFile(path string) (string, error) {
 	return strings.TrimSpace(string(data)), nil
 }
 
-func readYamlFile(path string, key string) (string, error) {
+func searchValueFromKey(data interface{}, key string) (string, error) {
+	result, err := jmespath.Search(key, data)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch value from key `%s`: %s", key, err)
+	}
+
+	switch v := result.(type) {
+	case int:
+		return strconv.Itoa(v), nil
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64), nil
+	case bool:
+		return strconv.FormatBool(v), nil
+	case string:
+		return v, nil
+	default:
+		return "", fmt.Errorf("failed to cast value of key `%s`", key)
+	}
+}
+
+func readYAMLFile(path string, key string) (string, error) {
 	if key == "" {
 		return "", fmt.Errorf("parameter `key` is required with `yaml` format")
 	}
@@ -75,14 +103,43 @@ func readYamlFile(path string, key string) (string, error) {
 		return "", err
 	}
 
-	if _, ok := data[key]; !ok {
-		return "", fmt.Errorf("top-level YAML key `%s` not found", key)
+	return searchValueFromKey(data, key)
+}
+
+func readJSONFile(path string, key string) (string, error) {
+	if key == "" {
+		return "", fmt.Errorf("parameter `key` is required with `json` format")
 	}
 
-	v, ok := data[key].(string)
-	if !ok {
-		return "", fmt.Errorf("failed to cast top-level YAML key `%s` as string", key)
+	jsonFile, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
 	}
 
-	return v, nil
+	var data map[string]interface{}
+	err = json.Unmarshal(jsonFile, &data)
+	if err != nil {
+		return "", err
+	}
+
+	return searchValueFromKey(data, key)
+}
+
+func readTOMLFile(path string, key string) (string, error) {
+	if key == "" {
+		return "", fmt.Errorf("parameter `key` is required with `toml` format")
+	}
+
+	tomlFile, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+
+	var data map[string]interface{}
+	err = toml.Unmarshal(tomlFile, &data)
+	if err != nil {
+		return "", err
+	}
+
+	return searchValueFromKey(data, key)
 }
