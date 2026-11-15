@@ -6,6 +6,9 @@ before:
 
 builds:
   - main: main.go
+    ldflags:
+      - -X main.Version={{ .Summary }}
+      - -X main.BuildTime={{ .Date }}
     env:
       - CGO_ENABLED=0
     goos:
