@@ -18,62 +18,26 @@ func RunCommand(command []string, env []string) error {
 	runner.Stdout = os.Stdout
 	runner.Stderr = os.Stderr
 	runner.Env = env
-	runner.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	signalChannel := make(chan os.Signal, 1)
 	signal.Notify(signalChannel)
-	defer signal.Stop(signalChannel)
 
 	if startErr := runner.Start(); startErr != nil {
 		return startErr
 	}
 
-	pgid := getProcessGroupID(runner.Process.Pid)
-	done := make(chan struct{})
-
+	// Forward all signals to the child process
 	go func() {
-		receivedTermination := false
 		for {
-			select {
-			case sig := <-signalChannel:
-				if isTermSignal(sig) {
-					if receivedTermination {
-						forwardSignalToGroup(runner.Process, pgid, syscall.SIGKILL)
-						return
-					}
-					receivedTermination = true
-				}
-				forwardSignalToGroup(runner.Process, pgid, sig)
-			case <-done:
-				return
-			}
+			receivedSignal := <-signalChannel
+			runner.Process.Signal(receivedSignal) // nolint:errcheck
 		}
 	}()
 
-	waitErr := runner.Wait()
-	close(done)
-
-	return waitErr
-}
-
-func forwardSignalToGroup(proc *os.Process, pgid int, sig os.Signal) {
-	if s, ok := sig.(syscall.Signal); ok {
-		_ = syscall.Kill(-pgid, s)
+	if waitErr := runner.Wait(); waitErr != nil {
+		runner.Process.Signal(syscall.SIGKILL) // nolint:errcheck
+		return waitErr
 	}
-}
 
-func getProcessGroupID(pid int) int {
-	pgid, err := syscall.Getpgid(pid)
-	if err != nil {
-		return pid
-	}
-	return pgid
-}
-
-func isTermSignal(sig os.Signal) bool {
-	switch sig {
-	case syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP:
-		return true
-	}
-	return false
+	return nil
 }
