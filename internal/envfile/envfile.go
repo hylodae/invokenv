@@ -23,18 +23,15 @@ type EnvFile struct {
 	Items []*EnvFileItem
 }
 
-// Exists checks if the invokenv.yml file exists in the directory.
-func Exists(dirPath string) bool {
-	path := fmt.Sprintf("%s/%s", dirPath, EnvFilename)
+// Exists checks if the invokenv.yml file exists.
+func Exists(path string) bool {
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		return true
 	}
 	return false
 }
 
-func Parse(dirPath string) (*EnvFile, error) {
-	path := fmt.Sprintf("%s/%s", dirPath, EnvFilename)
-
+func Parse(path string) (*EnvFile, error) {
 	yamlFile, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err

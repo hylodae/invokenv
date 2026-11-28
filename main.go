@@ -17,20 +17,26 @@ var (
 	BuildTime = "<filled by ldflags>"
 )
 
-func cmdRoot(ctx context.Context, cmd *cli.Command) error {
-	// Get current path
-	path, err := os.Getwd()
-	if err != nil {
-		return err
+func cmdRoot(ctx context.Context, cmd *cli.Command) (err error) {
+	envFilePath := cmd.String("envfile")
+
+	if envFilePath == "" {
+		// Get current path
+		path, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+
+		envFilePath = fmt.Sprintf("%s/%s", path, envfile.EnvFilename)
 	}
 
 	invokenvVars := []string{}
 
 	// Check if secrets file exists
-	log.Debugf("Looking for secrets file in `%s`", path)
-	if envfile.Exists(path) {
-		log.Debugf("Parsing secrets file in `%s`", path)
-		envFile, err := envfile.Parse(path)
+	log.Debugf("Looking for secrets file in `%s`", envFilePath)
+	if envfile.Exists(envFilePath) {
+		log.Debugf("Parsing secrets file in `%s`", envFilePath)
+		envFile, err := envfile.Parse(envFilePath)
 		if err != nil {
 			return err
 		}
@@ -40,7 +46,7 @@ func cmdRoot(ctx context.Context, cmd *cli.Command) error {
 			return err
 		}
 	} else {
-		log.Debugf("No secrets file found in `%s`", path)
+		log.Debugf("No secrets file found in `%s`", envFilePath)
 	}
 
 	subCommandEnv := os.Environ()
@@ -85,6 +91,11 @@ func main() {
 					log.SetLevel(logLevel)
 					return nil
 				},
+			},
+			&cli.StringFlag{
+				Name:    "envfile",
+				Aliases: []string{"f"},
+				Usage:   "file to use as invokenv config file",
 			},
 		},
 		Action: cmdRoot,
